@@ -1,0 +1,136 @@
+let userPremium = false;
+
+async function checkauth() {
+  try {
+    const response = await fetch('/api/auth/status');
+    const data = await response.json();
+
+    if (!data.authenticated) {
+      window.location.href = '/login';
+      return;
+    }
+
+    userPremium = data.premium;
+    document.getElementById('userStatus').textContent = `welcome, ${data.username}`;
+    document.getElementById('logoutBtn').style.display = 'block';
+
+    if (data.username === 'admin') {
+      document.getElementById('adminLink').style.display = 'block';
+    }
+
+    if (userPremium) {
+      const banner = document.getElementById('premiumStatus');
+      banner.textContent = '✨ premium access unlocked';
+      banner.style.display = 'block';
+    }
+
+    loadproducts();
+  } catch (error) {
+    window.location.href = '/login';
+  }
+}
+
+async function loadproducts() {
+  try {
+    const response = await fetch('/api/products');
+    const products = await response.json();
+
+    const grid = document.getElementById('productsGrid');
+    grid.innerHTML = '';
+
+    if (products.length === 0) {
+      grid.innerHTML = '<p style="text-align: center; color: #aaa;">no products available</p>';
+      return;
+    }
+
+    products.forEach(product => {
+      const card = document.createElement('div');
+      card.className = 'product-card';
+      card.innerHTML = `
+        <span class="product-badge ${product.premium_only ? 'badge-premium' : 'badge-free'}">
+          ${product.premium_only ? 'premium' : 'free'}
+        </span>
+        <h3>${product.name}</h3>
+        <p>${product.description || 'no description'}</p>
+      `;
+      card.addEventListener('click', () => openmodal(product));
+      grid.appendChild(card);
+    });
+  } catch (error) {
+    console.error('failed to load products:', error);
+  }
+}
+
+function openmodal(product) {
+  const modal = document.getElementById('productModal');
+  document.getElementById('modalTitle').textContent = product.name;
+  document.getElementById('modalDescription').textContent = product.description || 'no description';
+
+  const actions = document.getElementById('modalActions');
+  actions.innerHTML = '';
+
+  if (product.premium_only && !userPremium) {
+    const premiumBtn = document.createElement('a');
+    premiumBtn.href = 'https://rekonise.com/verify';
+    premiumBtn.className = 'btn-primary';
+    premiumBtn.textContent = 'get premium access';
+    premiumBtn.target = '_blank';
+    actions.appendChild(premiumBtn);
+
+    const verifyBtn = document.createElement('button');
+    verifyBtn.className = 'btn-secondary';
+    verifyBtn.textContent = 'i verified, unlock premium';
+    verifyBtn.addEventListener('click', verifypremium);
+    actions.appendChild(verifyBtn);
+  } else {
+    if (product.file_path) {
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = product.file_path;
+      downloadBtn.className = 'btn-primary';
+      downloadBtn.textContent = 'download';
+      downloadBtn.download = '';
+      actions.appendChild(downloadBtn);
+    } else {
+      actions.innerHTML = '<p style="color: #aaa;">no file available</p>';
+    }
+  }
+
+  modal.style.display = 'block';
+}
+
+async function verifypremium() {
+  try {
+    const response = await fetch('/api/auth/verify-premium', {
+      method: 'POST'
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert('premium access unlocked! reloading...');
+      window.location.reload();
+    } else {
+      alert(data.error || 'verification failed');
+    }
+  } catch (error) {
+    alert('verification failed');
+  }
+}
+
+document.querySelector('.close').addEventListener('click', () => {
+  document.getElementById('productModal').style.display = 'none';
+});
+
+window.addEventListener('click', (e) => {
+  const modal = document.getElementById('productModal');
+  if (e.target === modal) {
+    modal.style.display = 'none';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
+
+checkauth();

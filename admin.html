@@ -1,0 +1,104 @@
+async function checkadmin() {
+  try {
+    const response = await fetch('/api/auth/status');
+    const data = await response.json();
+
+    if (!data.authenticated || data.username !== 'admin') {
+      window.location.href = '/products';
+      return;
+    }
+
+    loadproducts();
+  } catch (error) {
+    window.location.href = '/login';
+  }
+}
+
+async function loadproducts() {
+  try {
+    const response = await fetch('/api/admin/products');
+    const products = await response.json();
+
+    const list = document.getElementById('productsList');
+    list.innerHTML = '';
+
+    if (products.length === 0) {
+      list.innerHTML = '<p style="color: #aaa;">no products yet</p>';
+      return;
+    }
+
+    products.forEach(product => {
+      const item = document.createElement('div');
+      item.className = 'product-item';
+      item.innerHTML = `
+        <div class="product-info">
+          <h3>${product.name}</h3>
+          <p>${product.description || 'no description'} | ${product.premium_only ? 'premium' : 'free'}</p>
+        </div>
+        <button class="btn-delete" onclick="deleteproduct(${product.id})">delete</button>
+      `;
+      list.appendChild(item);
+    });
+  } catch (error) {
+    console.error('failed to load products:', error);
+  }
+}
+
+document.getElementById('addProductForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const formdata = new FormData();
+  formdata.append('name', document.getElementById('productName').value);
+  formdata.append('description', document.getElementById('productDescription').value);
+  formdata.append('premium_only', document.getElementById('premiumOnly').checked);
+
+  const file = document.getElementById('productFile').files[0];
+  if (file) {
+    formdata.append('file', file);
+  }
+
+  try {
+    const response = await fetch('/api/admin/products', {
+      method: 'POST',
+      body: formdata
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert('product added successfully');
+      document.getElementById('addProductForm').reset();
+      loadproducts();
+    } else {
+      alert(data.error || 'failed to add product');
+    }
+  } catch (error) {
+    alert('failed to add product');
+  }
+});
+
+async function deleteproduct(id) {
+  if (!confirm('delete this product?')) return;
+
+  try {
+    const response = await fetch(`/api/admin/products/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      alert('product deleted');
+      loadproducts();
+    } else {
+      alert('failed to delete product');
+    }
+  } catch (error) {
+    alert('failed to delete product');
+  }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
+
+checkadmin();

@@ -1,0 +1,53 @@
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const db = require('../models/database');
+const { verify, admin } = require('../middleware/auth');
+const router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
+
+router.post('/products', verify, admin, upload.single('file'), (req, res) => {
+  const { name, description, premium_only } = req.body;
+  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
+
+  db.run(
+    'INSERT INTO products (name, description, file_path, premium_only) VALUES (?, ?, ?, ?)',
+    [name, description, file_path, premium_only ? 1 : 0],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'failed to create product' });
+      }
+      res.json({ message: 'product created', id: this.lastID });
+    }
+  );
+});
+
+router.delete('/products/:id', verify, admin, (req, res) => {
+  db.run('DELETE FROM products WHERE id = ?', [req.params.id], (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'failed to delete product' });
+    }
+    res.json({ message: 'product deleted' });
+  });
+});
+
+router.get('/products', verify, admin, (req, res) => {
+  db.all('SELECT * FROM products ORDER BY created_at DESC', [], (err, products) => {
+    if (err) {
+      return res.status(500).json({ error: 'database error' });
+    }
+    res.json(products);
+  });
+});
+
+module.exports = router;

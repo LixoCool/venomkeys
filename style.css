@@ -1,0 +1,26 @@
+const jwt = require('jsonwebtoken');
+
+function verify(req, res, next) {
+  const token = req.cookies.token;
+
+  if (!token) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'invalid token' });
+  }
+}
+
+function admin(req, res, next) {
+  if (req.user.username !== process.env.ADMIN_USERNAME) {
+    return res.status(403).json({ error: 'admin only' });
+  }
+  next();
+}
+
+module.exports = { verify, admin };
